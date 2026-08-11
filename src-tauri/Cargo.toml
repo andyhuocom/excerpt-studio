@@ -1,6 +1,6 @@
 [package]
 name = "excerpt-studio"
-version = "0.1.0"
+version = "0.1.1"
 description = "本地书摘分享卡片生成器"
 authors = ["Huo"]
 license = "MIT"

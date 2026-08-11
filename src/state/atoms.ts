@@ -1,16 +1,16 @@
 /**
- * [INPUT]: jotai 的 atom/atomWithStorage/createJSONStorage；themes 的 LayoutId/FontId；styleVisibility 的共享显隐状态与多代迁移器
+ * [INPUT]: jotai 的 atomWithStorage/createJSONStorage；themes 的 LayoutId/FontId；styleVisibility 的共享显隐状态与多代迁移器
  * [OUTPUT]: contentAtom / styleAtom / exportAtom / avatarAtom 及其状态类型
  * [POS]: 全应用状态的单一事实来源。content=书摘内容与元数据，style=外观参数，
- *        export=导出参数，avatar=头像库(用户身份资产，独立于书摘内容)。style/export/avatar 用
+ *        export=导出参数，avatar=头像库(用户身份资产，独立于书摘内容)。四者皆用
  *        atomWithStorage 持久化到 localStorage；style v12 在共享显隐基础上加入全局正文粗细，并从
- *        v11/v10 迁移；迁移边界会把非法字重收敛回默认档。content 为会话态，不入本地存储
- *        (日期含在内，故重开跟随今天)。
- * [SYNC]: 增删字段时同步 ExcerptCard 渲染、Dock 控件与持久化迁移约束(改 style/avatar 形状即升 key)。
+ *        v11/v10 迁移；迁移边界会把非法字重收敛回默认档。content(v1) 读取时把 shareDate 强制
+ *        归零为 null——日期字段不跟随正文持久化，重开永远跟随今天，其余字段(正文/书名/章节/
+ *        作者/二维码/署名/平台)正常跨会话保留。
+ * [SYNC]: 增删字段时同步 ExcerptCard 渲染、Dock 控件与持久化迁移约束(改 style/content/avatar 形状即升 key)。
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
 
-import { atom } from "jotai";
 import { atomWithStorage, createJSONStorage } from "jotai/utils";
 import { LAYOUTS, type LayoutId, type FontId } from "@/themes/themes";
 import {
@@ -69,8 +69,8 @@ export interface ExportState {
   format: "png";
 }
 
-// 默认样例：首屏即有一组完整、可直接导出的真实书摘内容
-export const contentAtom = atom<ExcerptContent>({
+// 默认样例：首屏即有一组完整、可直接导出的真实书摘内容；localStorage 为空或损坏时回退到这份默认值
+const DEFAULT_CONTENT_STATE: ExcerptContent = {
   content:
     "一个人在学会将他的语句变作一辆满载语义的大车之前，在学会从爱人的相貌中分辨出并爱上那种“朝圣者的灵魂”之前，在熟知“一度荣光的任何记忆/都无法补偿之后的漠视，/或使结局少些苦涩”这样的诗句之前，在这些东西注入他的血液之前，他就仍属于无语言家族。",
   bookTitle: "悲伤与理智",
@@ -80,7 +80,27 @@ export const contentAtom = atom<ExcerptContent>({
   shareName: "YOLO",
   shareDate: null,
   brand: "Apple Books",
-});
+};
+
+// shareDate 语义是「null=跟随今天」：若原样持久化，用户几天前设的具体日期会在重开后被当作「今天」
+// 静默展示，比「根本没设日期」更隐蔽。故读取时无条件把它归零，只有其余字段跨会话保留。
+const CONTENT_STORAGE_KEY = "excerpt.content.v1";
+
+function normalizeContentState(value: unknown): ExcerptContent {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return DEFAULT_CONTENT_STATE;
+  return { ...DEFAULT_CONTENT_STATE, ...(value as Partial<ExcerptContent>), shareDate: null };
+}
+
+const contentStorage = createJSONStorage<ExcerptContent>(
+  () => window.localStorage,
+  { reviver: (key, value) => (key === "" ? normalizeContentState(value) : value) },
+);
+
+export const contentAtom = atomWithStorage<ExcerptContent>(
+  CONTENT_STORAGE_KEY,
+  DEFAULT_CONTENT_STATE,
+  contentStorage,
+);
 
 // ============ 头像库(持久化) ============
 // 头像为 base64 图片，裸存 localStorage 易撑爆：上传侧(useAvatarLibrary)已缩放至 ≤256px，此处再封顶历史条数

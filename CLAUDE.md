@@ -19,7 +19,7 @@ output/ - 本地导出结果，属于用户生成物并由 .gitignore 排除
 </directory>
 
 <config>
-package.json - 依赖与脚本；test 串联正文编辑器、共享状态迁移、排版设置回归测试与前端构建，tauri:build 统一进入稳定签名的 macOS 打包链路
+package.json - 依赖与脚本；test 串联正文编辑器、共享状态迁移、排版设置、正文持久化回归测试与前端构建，tauri:build 统一进入稳定签名的 macOS 打包链路
 package-lock.json - npm 依赖解析锁，确保前端构建可复现
 vite.config.ts - Vite + React + Tailwind，@ 别名，固定 5173 端口
 tsconfig.json - TypeScript 工程引用入口，串联 app 与 node 两套配置
