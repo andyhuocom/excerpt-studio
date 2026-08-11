@@ -5,12 +5,24 @@
 100% 客户端渲染，无服务端、无账号、无网络请求。原生外壳（Tauri）只负责 Web 拿不到的两件事：
 调起系统保存对话框写盘、在 Finder 里定位导出的文件。
 
+![应用截图](screenshots/hero.webp)
+
 ## 功能
 
 - 居中画布实时预览，就地编辑正文 / 书名 / 作者 / 章节等卡片元素
 - 5 套版式 × 12 套配色 × 图片背景三轴独立，各自记忆
 - 中文六档 + 西文五档系统字体，运行时探测本机是否装有对应字体
 - 一键导出高清 PNG，支持自定义倍率
+
+## 效果预览
+
+| 经典 | 日历 | 墨白 |
+|---|---|---|
+| ![经典版式](screenshots/classic.webp) | ![日历版式](screenshots/calendar.webp) | ![墨白版式](screenshots/mono.webp) |
+
+| 手札 | 锦书 |
+|---|---|
+| ![手札版式](screenshots/note.webp) | ![锦书版式](screenshots/jinshu.webp) |
 
 ## 环境要求
 

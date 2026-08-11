@@ -14,6 +14,7 @@ src/ - React 前端与装配入口 (6 子目录: components/render/state/themes/
 src-tauri/ - Tauri 原生外壳 (4 子目录: src/capabilities/icons/gen)；save_png / reveal_path 两命令，跨平台(macOS/Windows/Linux)
 script/ - macOS 可复现打包入口；稳定 ad-hoc 身份签名并封装 DMG
 .github/ - GitHub Actions CI；按 tag 触发 macOS(DMG)/Windows(nsis+msi) 双平台构建并发布 Release
+screenshots/ - README 引用的应用截图与版式样张，纯展示用图片资产，非运行时依赖
 output/ - 本地导出结果，属于用户生成物并由 .gitignore 排除
 </directory>
 
@@ -26,7 +27,7 @@ src-tauri/tauri.conf.json - 窗口/app 打包/中间态 ad-hoc 签名/assetProto
 .claude/launch.json - Claude 本地开发启动配置，执行 npm run dev 并探测 5173 端口
 ANALYSIS.md - 需求分析与技术决策(渲染核心/字体/设计语言)
 AGENTS.md - 工作协议与 GEB 分形文档教义
-README.md - 面向外部贡献者的项目说明：功能/构建/测试/许可证
+README.md - 面向外部贡献者的项目说明：功能/构建/测试/许可证，引用 screenshots/ 下的应用截图与版式样张
 LICENSE - MIT 许可证全文
 </config>
 
