@@ -1,0 +1,72 @@
+/* ============================================================
+   设计系统 · 令牌层
+   [INPUT]: 依赖浏览器 CSS 自定义属性级联、系统字体可用性及 App 对运行时令牌的覆盖契约
+   [OUTPUT]: 对 studio.css 与组件提供工作室、排版、形状、卡片主题和运行时变量的统一令牌
+   [POS]: 暗房工作室 + 卡片主题的单一事实来源；studio.css 只消费这里的变量。
+   [SYNC]: 改配色、字体映射或形状半径时同步 styles/CLAUDE.md 的令牌边界。
+   [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+   ============================================================ */
+:root {
+  /* -- 暗房工作室（冷近黑，克制） -- */
+  --studio: #0c0d10;
+  --studio-hi: #14171d;
+  --panel: rgba(24, 26, 31, 0.72);
+  --panel-solid: #181a1f;
+  --line: rgba(255, 255, 255, 0.09);
+  --line-2: rgba(255, 255, 255, 0.16);
+  --ink-hi: #eceef2;
+  --ink: #c7cad2;
+  --ink-lo: #8b909b;
+  --ink-faint: #5b606b;
+
+  /* -- 强调色：手稿琥珀（取自"泛黄的信"与阅读灯光），只用于主操作与选中态 -- */
+  --accent: #e0a84e;
+  --accent-2: #f0c069;
+  --accent-ink: #1a1305;
+
+  /* -- 形状与浮起 -- */
+  --r-card: 22px;
+  --r-bar: 20px;
+  --r-ctl: 11px;
+  --dock-shadow: 0 24px 60px -14px rgba(0, 0, 0, 0.65), 0 6px 18px -6px rgba(0, 0, 0, 0.5);
+  /* 卡片不用投影：html-to-image 在 WKWebView 里把 box-shadow 渲染成右偏的单侧暗晕
+     （像素采样实证：右缘 lum 74 vs 左缘 145），导出不可靠。改靠圆角+色彩对比区分卡片，
+     换来 有背景==无背景 的干净，且预览与导出一致(WYSIWYG)。需要浮起感时改用可靠手段
+     (如外框底板叠一层径向暗影)，勿再依赖 box-shadow。 */
+  --card-shadow: none;
+
+  /* -- 字体：拿来主义，系统字为免费基线 -- */
+  --font-ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, "PingFang SC", sans-serif;
+
+  /* 卡片正文字体：十一档 macOS 系统字体，事实源=themes.ts 的 FONTS(id/label/probe 对应此处变量名)。
+     每档只登一个真实 family + 兜底通用族，不夹带营销名；San Francisco 用 -apple-system 关键字取用
+     (WebKit 限制，不能按字面名 "San Francisco" 匹配)。New York 同受此限却无关键字替代通路，
+     选了也渲染不出，故未登记(见 themes.ts 的 FONTS 注释)。 */
+  --font-pingfang: "PingFang SC", -apple-system, sans-serif;
+  --font-songti: "Songti SC", serif;
+  --font-heiti: "Heiti SC", sans-serif;
+  --font-kaiti: "Kaiti SC", serif;
+  --font-fangsong: "STFangsong", serif;
+  --font-yuanti: "Yuanti SC", sans-serif;
+  --font-sanfrancisco: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --font-helveticaneue: "Helvetica Neue", Helvetica, sans-serif;
+  --font-timesnewroman: "Times New Roman", Times, serif;
+  --font-georgia: Georgia, serif;
+  --font-avenirnext: "Avenir Next", Avenir, sans-serif;
+
+  /* -- 运行时可变（由 App 写入 root.style；此处默认=首帧兜底，避免接线前裸样式） -- */
+  --card-font: var(--font-pingfang);
+  --card-w: 390px;
+  --frame-pad: 64px;
+  --quote-max: 20px;
+  --quote-weight: 500;
+  --quote-weight-emphasis: 600;
+  --bg: linear-gradient(140deg, #4cc8c8, #202033); /* 图片背景默认 Midnight(ray.so) */
+  /* 卡片配色令牌，默认=「墨金」配色(见 schemes.ts)；App 按所选配色/自定义底色覆盖 */
+  --c-bg: #1b1c1e;
+  --c-ink: #e9e0cb;
+  --c-mut: #a49c8b;
+  --c-faint: #8c8577;
+  --c-accent: #cbbd9c;
+  --c-qr: #fff;
+}

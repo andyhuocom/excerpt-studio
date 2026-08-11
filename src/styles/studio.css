@@ -1,0 +1,531 @@
+/* ============================================================
+   设计系统 · 工作室与卡片
+   [INPUT]: 依赖 tokens.css 的设计令牌、App 注入的运行时 CSS 变量及 components 输出的语义类名/data 属性
+   [OUTPUT]: 对应用提供工作室 chrome、控件视觉、五套卡片版式与响应式布局规则
+   [POS]: 消费 tokens.css，定义暗房 chrome（顶栏/舞台/磨砂控制条）与卡片版式。
+          卡片三轴正交：`.stage[data-layout]` 只承载**结构**(显隐/排布/内边距/字号)；
+          **颜色**一律消费 --c-*(bg/ink/mut/faint/accent/qr) 令牌，由 App 按所选配色写入；
+          **图片背景**吃 --bg，底板恒为直角；卡片仅在有背景时保留圆角，bare 状态改为直角。
+          类名与 components/ 下的 JSX 一一对应。
+   [SYNC]: 增删版式时同步 [data-layout] 段与 themes.ts；改配色令牌时同步 schemes.ts。
+   [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+   ============================================================ */
+
+/* -- reset -- */
+* { box-sizing: border-box; }
+html, body, #root { height: 100%; overflow: hidden; }
+body { margin: 0; }
+
+.app {
+  font-family: var(--font-ui);
+  color: var(--ink);
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: radial-gradient(130% 100% at 50% -18%, var(--studio-hi) 0%, var(--studio) 56%);
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+
+/* ================= top bar ================= */
+.topbar {
+  height: 56px;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--line);
+}
+.brand { display: flex; align-items: baseline; gap: 9px; }
+.brand .mark { font-family: var(--font-songti); font-size: 19px; font-weight: 600; color: var(--ink-hi); letter-spacing: 0.02em; }
+.brand .sub { font-size: 10.5px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--ink-faint); font-weight: 600; }
+.top-actions { display: flex; align-items: center; gap: 6px; }
+.ghost {
+  font: inherit; font-size: 13px; color: var(--ink-lo);
+  background: transparent; border: 0; padding: 7px 11px; border-radius: 9px;
+  cursor: pointer; display: flex; align-items: center; gap: 6px;
+}
+.ghost:hover { color: var(--ink-hi); background: rgba(255, 255, 255, 0.05); }
+.split { display: flex; align-items: stretch; margin-left: 6px; position: relative; }
+.btn-primary {
+  font: inherit; font-size: 13px; font-weight: 600; color: var(--accent-ink);
+  background: linear-gradient(180deg, var(--accent-2), var(--accent));
+  border: 0; padding: 8px 15px; border-radius: 10px 0 0 10px; cursor: pointer;
+  display: flex; align-items: center; gap: 7px;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.25) inset, 0 6px 16px -6px rgba(224, 168, 78, 0.6);
+}
+.btn-caret {
+  font: inherit; color: var(--accent-ink);
+  background: linear-gradient(180deg, var(--accent-2), var(--accent));
+  border: 0; border-left: 1px solid rgba(0, 0, 0, 0.18); padding: 8px 9px;
+  border-radius: 0 10px 10px 0; cursor: pointer;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.25) inset;
+}
+.btn-primary:hover, .btn-caret:hover { filter: brightness(1.05); }
+.btn-primary:disabled, .btn-caret:disabled { opacity: 0.6; cursor: default; filter: none; }
+.menu {
+  position: absolute; top: 44px; right: 0; z-index: 40;
+  background: var(--panel-solid); border: 1px solid var(--line-2);
+  border-radius: 12px; padding: 6px; min-width: 190px;
+  box-shadow: var(--dock-shadow);
+}
+.menu button {
+  width: 100%; text-align: left; font: inherit; font-size: 13px; color: var(--ink);
+  background: transparent; border: 0; padding: 9px 11px; border-radius: 8px; cursor: pointer;
+  display: flex; justify-content: space-between; gap: 12px;
+}
+.menu button:hover { background: rgba(255, 255, 255, 0.06); color: var(--ink-hi); }
+.menu button span { color: var(--ink-faint); font-size: 11px; }
+
+/* ================= workspace (stage + 右侧栏) ================= */
+/* 舞台占满，右侧栏绝对浮在其右缘；舞台以 padding-right 让位，故卡片居中于剩余区、绝不被遮。
+   收起时撤掉让位、右侧栏右滑出屏，舞台自然回收空间。 */
+.workspace { position: relative; flex: 1 1 auto; min-height: 0; display: flex; }
+
+/* ================= stage ================= */
+.stage {
+  flex: 1 1 auto; position: relative;
+  display: flex; overflow: auto;
+  justify-content: safe center; align-items: safe center;
+  padding: 46px 24px 30px;
+  padding-right: 360px;
+  min-height: 0;
+  transition: padding-right 0.32s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.workspace.dock-collapsed .stage { padding-right: 46px; }
+/* 顶部比其余三边多留 16px：给绝对定位的 .width-hud(见下)腾出悬浮空间，矮窗口下也不易被裁切。 */
+
+/* .frame 的定位容器。.width-hud(宽度徽标/恢复默认按钮)用绝对定位悬浮在 .frame 上方、脱离文档流——
+   早前用 flex column + gap 把它排进正常流，出现/消失会改变 .canvas 高度，而 .stage 用
+   justify/align:safe center 居中整个 .canvas，于是卡片跟着上下跳一下。绝对定位后 .canvas 的盒子
+   大小只取决于 .frame，与 .width-hud 是否渲染无关，卡片位置纹丝不动。 */
+.canvas { position: relative; display: flex; flex-direction: column; align-items: center; flex-shrink: 0; }
+.width-hud {
+  position: absolute; left: 50%; bottom: calc(100% + 12px); transform: translateX(-50%);
+  display: flex; align-items: center; justify-content: center;
+}
+.width-badge, .width-reset {
+  font: inherit; font-size: 12.5px; font-weight: 600; color: var(--ink-hi);
+  background: var(--panel-solid); border: 1px solid var(--line-2);
+  padding: 5px 13px; border-radius: 999px; box-shadow: var(--dock-shadow);
+}
+.width-badge { letter-spacing: 0.02em; pointer-events: none; } /* 纯展示徽标，不拦截下方拖拽 */
+.width-reset { padding-left: 10px; cursor: pointer; display: flex; align-items: center; gap: 5px; }
+.width-reset svg { color: var(--ink-faint); }
+.width-reset:hover { border-color: var(--accent); }
+.width-reset:hover svg { color: var(--accent); }
+
+.frame {
+  position: relative;
+  /* 居中交给舞台 justify/align: safe center，勿用 margin:auto——其解析出的大边距会被
+     html-to-image 克隆复制，把导出推移裁切。flex-shrink:0 防止 frame 被压缩。 */
+  flex-shrink: 0;
+  padding: var(--frame-pad);
+  border-radius: 0;
+  display: grid; place-items: center;
+  transition: padding 0.25s ease, background 0.4s ease;
+  background: var(--bg);
+}
+.stage.bare .frame { padding: 0; background: transparent; }
+.stage.bare .handle { opacity: 0; pointer-events: none; }
+
+.handle {
+  position: absolute; top: 50%; transform: translateY(-50%);
+  width: 10px; height: 10px; border-radius: 50%;
+  background: #fff; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.15), 0 2px 6px rgba(0, 0, 0, 0.35);
+  cursor: ew-resize; transition: opacity 0.2s;
+}
+.handle.l { left: -5px; }
+.handle.r { right: -5px; }
+
+/* ================= the card ================= */
+.card {
+  width: var(--card-w);
+  border-radius: var(--r-card);
+  padding: 34px 32px 30px;
+  box-shadow: var(--card-shadow);
+  font-family: var(--card-font);
+  /* 配色令牌落地：底色/正文色吃 App 写入的 --c-*(见 schemes.ts)，与版式(data-layout)解耦 */
+  background: var(--c-bg);
+  color: var(--c-ink);
+  transition: background 0.35s ease, color 0.2s ease;
+  position: relative; overflow: hidden;
+}
+.stage.bare .card { border-radius: 0; }
+
+/* editable affordance */
+.edit { border-radius: 6px; outline: none; transition: box-shadow 0.15s, background 0.15s; }
+.edit:hover { box-shadow: 0 0 0 1px var(--line-2); background: rgba(125, 125, 125, 0.06); }
+.edit:focus { box-shadow: 0 0 0 2px var(--accent); background: transparent; }
+
+/* -- shared blocks -- */
+.hdr { display: flex; align-items: center; gap: 12px; margin-bottom: 26px; }
+.avatar {
+  width: 46px; height: 46px; border-radius: 50%; flex: 0 0 auto;
+  background: radial-gradient(120% 120% at 30% 20%, #ffd27a, #c76b8a 60%, #3a2a4a);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.12) inset;
+  display: grid; place-items: center; cursor: pointer;
+}
+.avatar svg { width: 26px; height: 26px; opacity: 0.92; }
+.hdr .who { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.hdr .name { font-size: 16px; font-weight: 600; color: var(--c-ink); }
+.hdr .date { font-size: 12.5px; color: var(--c-mut); }
+
+/* --quote-max/--quote-weight 由 App 按全局正文设置写入；长摘录让卡片自然变高，不挤字号。
+   日历版式消费 --quote-weight-emphasis，在基础档上强化一级，保留其原有视觉层次。 */
+.quote { font-size: var(--quote-max); line-height: 1.92; letter-spacing: 0.01em; font-weight: var(--quote-weight); word-break: break-word; }
+/* 即使正文选到偏粗，<strong> 仍显式拉到 800，尽量维持语义强调的对比。 */
+.quote strong { font-weight: 800; }
+/* 正文行内 markdown 编辑(MarkdownQuote)：样式标签与 contentEditable 是同一棵 DOM，原生光标直接
+   落在用户看到的字形之间，不再维护会因字重/字体 metric 不同而漂移的透明输入层。 */
+.md-quote { position: relative; }
+/* 定界符默认带 hidden，display:none 将它真正移出排版；光标进入样式片段时移除 hidden，
+   .md-marker 只负责把可编辑的原始语法调暗并清掉继承样式。 */
+.md-marker { font-weight: 400; font-style: normal; text-decoration: none; opacity: 0.45; }
+.md-marker[hidden] { display: none; }
+/* 下划线(~text~)对齐参考图的批注感：清晰直线与字面留出空气，不贴字、不跳过笔画；
+   颜色从当前配色的装饰色与正文色混合，深浅卡片都保持克制但可辨。 */
+.quote u {
+  text-decoration-line: underline;
+  text-decoration-style: solid;
+  text-decoration-color: color-mix(in srgb, var(--c-accent) 72%, currentColor);
+  text-decoration-thickness: 0.1em;
+  text-underline-offset: 0.28em;
+  text-decoration-skip-ink: none;
+}
+/* 高亮(==text==) → <mark>，荧光笔效果：半透明暖黄，不用 mix-blend-mode(深色卡片会糊)，
+   也不用 html-to-image 在高倍率下会拉偏的 box-shadow。横向内边距必须为零，否则高亮嵌在
+   下划线里时，文字装饰不会穿过 padding，边界会出现断口。box-decoration-break 保留跨行圆角。 */
+.quote mark {
+  background: rgba(255, 214, 64, 0.5); color: inherit; border-radius: 3px;
+  box-shadow: none;
+  padding-inline: 0;
+  box-decoration-break: clone; -webkit-box-decoration-break: clone;
+}
+/* 行内代码：等宽字体 + 药丸底色。底色用 color-mix 混当前文字色(而非固定 rgba)，
+   深浅两类配色都能读。禁止用 html-to-image 在高倍率下会错位的 box-shadow；横向内边距
+   保持为零，避免行内代码嵌在下划线中时切断装饰线。box-decoration-break 保留跨行圆角。 */
+.quote code {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 0.9em;
+  background: color-mix(in srgb, currentColor 14%, transparent); color: inherit; border-radius: 5px;
+  box-shadow: none;
+  padding-inline: 0;
+  box-decoration-break: clone; -webkit-box-decoration-break: clone;
+}
+/* 字体 metric 细化：苹方保持基线；宋体去字距、行距收紧显经典；楷体加行距与呼吸让笔画舒展。
+   其余九档(黑体/仿宋/圆体/六个西文字体)沿用基线 metric，未经样张校准前不假装调过。 */
+.stage[data-font="songti"] .quote { letter-spacing: 0; line-height: 1.86; }
+.stage[data-font="kaiti"] .quote { letter-spacing: 0.03em; line-height: 2; }
+.src { margin-top: 22px; font-size: 13.5px; line-height: 1.7; color: var(--c-mut); }
+.src .slash { opacity: 0.6; }
+.src .author { margin-top: 5px; }
+.divider { height: 1px; margin: 24px 0 16px; background: currentColor; opacity: 0.14; }
+.foot { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; }
+.foot-left { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.foot .brand-line { font-size: 13px; color: var(--c-faint); }
+.credit { display: none; font-size: 12.5px; line-height: 1.7; color: var(--c-mut); }
+/* 二维码静默区=内边距。底衬 --c-qr 跟随配色：深底配色铺白盒保对比可扫，浅底透明留卡片色，
+   不戳白补丁。白盒走容器 background(div 背景导出可靠)。 */
+.qr { width: 74px; height: 74px; flex: 0 0 auto; border-radius: 6px; overflow: hidden; background: var(--c-qr); padding: 6px; }
+
+/* 按版式点亮的可选块（默认隐藏） */
+.bar { display: none; height: 9px; background: var(--c-accent); border-radius: 1px; }
+.bar-top { margin-bottom: 24px; }
+.bar-bottom { margin-top: 24px; }
+.hdr-rule { display: none; height: 1px; margin-bottom: 24px; background: currentColor; opacity: 0.16; }
+.date-cn { display: none; }
+
+/* calendar-only header */
+.cal { display: none; text-align: center; margin-bottom: 30px; }
+.cal .num { font-size: 104px; line-height: 0.9; font-weight: 800; letter-spacing: -0.02em; }
+.cal .mon { font-size: 26px; font-weight: 700; letter-spacing: 0.14em; margin-top: 6px; }
+.cal .wd { font-size: 14px; margin-top: 12px; letter-spacing: 0.1em; }
+.cal .rule { width: 44px; height: 2px; background: currentColor; opacity: 0.5; margin: 20px auto 0; }
+
+/* jinshu-only header */
+.jin { display: none; margin-bottom: 24px; }
+.jin .title { font-size: 29px; line-height: 1.4; font-weight: 700; text-wrap: balance; }
+.jin .author { font-size: 14px; margin-top: 14px; color: var(--c-mut); }
+
+/* 主题=版式(结构)×配色(颜色)×图片背景(外框) 三轴正交：以下 [data-layout] 段只管结构，
+   颜色全部吃 App 写入的 --c-* 令牌(见 schemes.ts)，故任一配色可配任一版式。 */
+
+/* ============ LAYOUT: classic 经典（默认版式：头像头 + 出处 + 页脚二维码） ============ */
+/* 经典即基线版式，结构全走上面的默认块，无需专段。 */
+
+/* ============ LAYOUT: calendar 日历（大日期表头，居中，无头像/分割线） ============ */
+.stage[data-layout="calendar"] .card { text-align: center; padding-top: 44px; }
+.stage[data-layout="calendar"] .hdr { display: none; }
+.stage[data-layout="calendar"] .cal { display: block; }
+.stage[data-layout="calendar"] .quote { font-weight: var(--quote-weight-emphasis); text-align: left; }
+.stage[data-layout="calendar"] .src { text-align: center; }
+.stage[data-layout="calendar"] .src .book { font-weight: 600; color: var(--c-ink); }
+.stage[data-layout="calendar"] .src .slash,
+.stage[data-layout="calendar"] .src .dot,
+.stage[data-layout="calendar"] .src .chapter { display: none; }
+.stage[data-layout="calendar"] .src .book::before { content: "《"; }
+.stage[data-layout="calendar"] .src .book::after { content: "》"; }
+.stage[data-layout="calendar"] .divider { display: none; }
+.stage[data-layout="calendar"] .foot { flex-direction: column; align-items: center; gap: 12px; margin-top: 30px; }
+
+/* ============ LAYOUT: jinshu 锦书（书名大标题表头，页脚昵称日期，无二维码） ============ */
+.stage[data-layout="jinshu"] .hdr { display: none; }
+.stage[data-layout="jinshu"] .jin { display: block; }
+.stage[data-layout="jinshu"] .src .book,
+.stage[data-layout="jinshu"] .src .dot,
+.stage[data-layout="jinshu"] .src .author { display: none; }
+.stage[data-layout="jinshu"] .foot .qr { display: none; }
+.stage[data-layout="jinshu"] .credit { display: block; }
+.stage[data-layout="jinshu"] .brand-line { font-size: 12.5px; line-height: 1.7; }
+
+/* ============ LAYOUT: mono 墨白（凸版·做旧粗横杠 + 大标题 + 中文数字日期，无二维码） ============ */
+.stage[data-layout="mono"] .card { padding: 36px 34px; }
+.stage[data-layout="mono"] .bar { display: block; }
+.stage[data-layout="mono"] .jin { display: block; margin-bottom: 20px; }
+.stage[data-layout="mono"] .jin .author { font-size: 14px; margin-top: 10px; }
+.stage[data-layout="mono"] .avatar { display: none; }
+.stage[data-layout="mono"] .hdr { margin: 0 0 26px; }
+.stage[data-layout="mono"] .name { font-size: 17px; }
+.stage[data-layout="mono"] .date-normal { display: none; }
+.stage[data-layout="mono"] .date-cn { display: inline; }
+.stage[data-layout="mono"] .src .book,
+.stage[data-layout="mono"] .src .dot,
+.stage[data-layout="mono"] .src .author { display: none; }
+/* 虚线分隔取 currentColor(=--c-ink)，opacity 收淡；随配色自适应，不再钉死暖米色 */
+.stage[data-layout="mono"] .divider { height: 0; background: none; border-top: 1px dashed currentColor; opacity: 0.3; }
+.stage[data-layout="mono"] .foot .qr { display: none; }
+
+/* ============ LAYOUT: note 手札（内嵌信笺细边框 + 头下分隔，无二维码） ============ */
+.stage[data-layout="note"] .card { padding: 44px 40px; }
+/* 信笺边框取 currentColor(=--c-ink)，opacity 收淡；随配色自适应 */
+.stage[data-layout="note"] .card::before {
+  content: ""; position: absolute; inset: 16px; pointer-events: none;
+  border: 1px solid currentColor; opacity: 0.26; border-radius: 12px;
+}
+.stage[data-layout="note"] .hdr { margin-bottom: 20px; }
+.stage[data-layout="note"] .hdr-rule { display: block; }
+.stage[data-layout="note"] .foot .qr { display: none; }
+
+/* ================= 内容元素显隐(版式专属设置驱动，见 Dock) =================
+   头像/昵称/日期/书名/章节/作者/平台/二维码的值全局共享，仅显隐逐版式各记一份，由 Stage 写 data-hide-* 落地。
+   昵称隐藏时连带清掉页脚 credit 里的「 · 」分隔符(其只在昵称+日期并列时才有意义)，避免孤立标点。
+   章节有自己的开关，但 data-hide-chapter 已在 Stage 折入书名开关(书名关闭必然一并隐藏)，故本节
+   只需按此单一属性响应；章节隐藏时连带清掉出处行的间隔点，书名隐藏时再连带清掉斜杠，避免孤立标点。
+   当同一语义组的叶节点全部隐藏时，同时收起父容器与关联分隔线，避免空 margin 被导出进 PNG。
+   置于全部 [data-layout] 结构段之后：与其同权重，源序在后者胜出——只加隐藏，不掀翻任何结构性显隐。 */
+.stage[data-hide-avatar="true"] .avatar { display: none; }
+
+.stage[data-hide-name="true"] .hdr .name,
+.stage[data-hide-name="true"] .credit-name,
+.stage[data-hide-name="true"] .credit-sep { display: none; }
+
+.stage[data-hide-date="true"] .hdr .date,
+.stage[data-hide-date="true"] .cal,
+.stage[data-hide-date="true"] .credit-date { display: none; }
+
+.stage[data-hide-title="true"] .jin .title,
+.stage[data-hide-title="true"] .src .book,
+.stage[data-hide-title="true"] .src .slash { display: none; }
+
+.stage[data-hide-chapter="true"] .src .chapter,
+.stage[data-hide-chapter="true"] .src .dot { display: none; }
+
+.stage[data-hide-author="true"] .jin .author,
+.stage[data-hide-author="true"] .src .author { display: none; }
+
+.stage[data-hide-brand="true"] .brand-line { display: none; }
+
+.stage[data-hide-qr="true"] .qr { display: none; }
+
+/* 组合显隐：叶节点全灭时父容器也必须消失，否则 hdr/jin/src 的 margin 会留下导出空洞。 */
+.stage[data-hide-name="true"][data-hide-date="true"] .hdr .who { display: none; }
+.stage[data-layout="classic"][data-hide-avatar="true"][data-hide-name="true"][data-hide-date="true"] .hdr,
+.stage[data-layout="note"][data-hide-avatar="true"][data-hide-name="true"][data-hide-date="true"] .hdr,
+.stage[data-layout="mono"][data-hide-name="true"][data-hide-date="true"] .hdr { display: none; }
+.stage[data-layout="note"][data-hide-avatar="true"][data-hide-name="true"][data-hide-date="true"] .hdr-rule { display: none; }
+.stage[data-hide-title="true"][data-hide-author="true"] .jin { display: none; }
+/* classic/calendar/note 的 .src 装书名+章节+作者，三者全灭才空；jinshu/mono 的 .src 只装章节
+   (书名走 .jin 大标题，作者也走 .jin)，故章节一灭(含书名级联)该行必空，与作者显隐无关 */
+.stage:is([data-layout="classic"], [data-layout="calendar"], [data-layout="note"])[data-hide-title="true"][data-hide-author="true"] .src,
+.stage:is([data-layout="jinshu"], [data-layout="mono"])[data-hide-chapter="true"] .src { display: none; }
+
+/* ================= sidebar (settings panel) ================= */
+/* 右侧磨砂设置栏：竖排右移，设计沿用原磨砂面板。绝对定位浮在舞台右缘(不遮卡片靠 .stage padding)。
+   面板宽/间距用变量，拉手与收起位移皆据其算，改宽只动一处。 */
+.dock-wrap {
+  --panel-w: 340px; --panel-gap: 16px;
+  position: absolute; top: 0; right: 0; bottom: 0; z-index: 30;
+  pointer-events: none; /* 空白处点击穿透到舞台，仅拉手/面板可点 */
+}
+.dock {
+  position: absolute; right: var(--panel-gap); top: 50%; transform: translateY(-50%);
+  width: var(--panel-w); pointer-events: auto;
+  /* 面板不能成为 overflow 容器：ThemeSelect 向上弹出，祖先 overflow 会把浮层裁掉。
+     小窗口高度由 .section-body 的 clamp 收敛，滚动仍只发生在专属设置内部。 */
+  display: flex; flex-direction: column; gap: 15px;
+  padding: 17px 18px; border-radius: var(--r-bar);
+  background: var(--panel); border: 1px solid var(--line);
+  box-shadow: var(--dock-shadow);
+  backdrop-filter: blur(22px) saturate(1.35); -webkit-backdrop-filter: blur(22px) saturate(1.35);
+  transition: transform 0.32s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.24s ease;
+}
+/* 竖向拉手贴面板左缘；收起时面板右滑出屏、拉手滑到右缘继续可点 */
+.dock-tab {
+  position: absolute; right: calc(var(--panel-w) + var(--panel-gap)); top: 50%; transform: translateY(-50%);
+  width: 22px; height: 52px; pointer-events: auto;
+  display: grid; place-items: center;
+  background: var(--panel); border: 1px solid var(--line); border-right: 0;
+  border-radius: 10px 0 0 10px; color: var(--ink-lo); cursor: pointer;
+  backdrop-filter: blur(20px) saturate(1.3); -webkit-backdrop-filter: blur(20px) saturate(1.3);
+  transition: right 0.32s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.dock-tab:hover { color: var(--ink-hi); }
+.workspace.dock-collapsed .dock { transform: translate(calc(var(--panel-w) + 40px), -50%); opacity: 0; pointer-events: none; }
+.workspace.dock-collapsed .dock-tab { right: 0; }
+
+.grp { display: flex; flex-direction: column; gap: 7px; }
+.grp > .lbl { font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink-faint); font-weight: 600; padding-left: 2px; }
+
+/* 字体是主选择，粗细是紧随其后的短辅助选择；同排不牺牲字体名的最小可读宽度。 */
+.font-ctl { display: grid; grid-template-columns: minmax(128px, 1fr) auto; align-items: center; gap: 8px; }
+.font-ctl .dd-select { min-width: 0; }
+.font-ctl .dd-trigger { width: 100%; min-width: 0; }
+.font-weight-ctl .seg { flex-wrap: nowrap; padding: 2px; }
+.font-weight-ctl .seg.mini button { padding: 4px 7px; }
+
+.seg { display: flex; flex-wrap: wrap; background: rgba(0, 0, 0, 0.28); border: 1px solid var(--line); border-radius: var(--r-ctl); padding: 3px; }
+.seg button {
+  font: inherit; font-size: 12.5px; color: var(--ink-lo); background: transparent;
+  border: 0; padding: 5px 10px; border-radius: 8px; cursor: pointer; white-space: nowrap;
+  display: flex; align-items: center; gap: 6px; flex: 1 1 auto; justify-content: center;
+}
+.seg button:hover { color: var(--ink-hi); }
+.seg button[aria-pressed="true"] { background: rgba(255, 255, 255, 0.1); color: var(--ink-hi); box-shadow: 0 1px 0 rgba(255, 255, 255, 0.06) inset; }
+.seg.mini button { padding: 5px 9px; }
+
+.swatches { display: flex; flex-wrap: wrap; gap: 7px; }
+.sw { width: 26px; height: 26px; border-radius: 8px; cursor: pointer; border: 1px solid rgba(255, 255, 255, 0.14); padding: 0; }
+.sw[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--studio), 0 0 0 4px var(--accent); }
+.sw-custom { position: relative; overflow: hidden; background: conic-gradient(from 0deg, #f43f5e, #f59e0b, #eab308, #22c55e, #06b6d4, #6366f1, #d946ef, #f43f5e); }
+.sw-custom input { position: absolute; inset: -4px; width: calc(100% + 8px); height: calc(100% + 8px); opacity: 0; cursor: pointer; border: 0; padding: 0; }
+/* 配色色块中心叠一枚 ink 色点，令三套深色配色也可区分 */
+.sw-scheme { position: relative; }
+.sw-ink { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 9px; height: 9px; border-radius: 50%; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.22); pointer-events: none; }
+
+/* ===== 通用搜索下拉（DropdownSelect 底座；复刻 ray.so，向上弹优先，列表在上·搜索在下）=====
+   ThemeSelect(图片背景)/FontSelect(字体)共用这套壳；"选项长什么样"由各自的 renderTrigger/
+   renderOption 决定——ThemeSelect 自带 .theme-dot 装饰色点，与此处无关。 */
+.dd-select { position: relative; }
+.dd-trigger {
+  display: flex; align-items: center; gap: 8px; min-width: 128px;
+  font: inherit; font-size: 12.5px; color: var(--ink-hi);
+  background: rgba(0, 0, 0, 0.28); border: 1px solid var(--line);
+  border-radius: var(--r-ctl); padding: 6px 10px; cursor: pointer;
+}
+.dd-trigger:hover { border-color: var(--line-2); }
+.dd-trigger .dd-value { flex: 1 1 auto; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dd-trigger svg { color: var(--ink-lo); flex: 0 0 auto; }
+.theme-dot { width: 16px; height: 16px; border-radius: 50%; flex: 0 0 auto; box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.14) inset; }
+
+.dd-panel {
+  position: absolute; left: 0; right: 0; z-index: 50;
+  background: var(--panel-solid); border: 1px solid var(--line-2);
+  border-radius: 12px; padding: 6px; box-shadow: var(--dock-shadow);
+  display: flex; flex-direction: column;
+}
+.dd-panel[data-placement="up"] { bottom: calc(100% + 8px); }
+.dd-panel[data-placement="down"] { top: calc(100% + 8px); }
+.dd-list { display: flex; flex-direction: column; max-height: var(--dd-list-max, 264px); overflow-y: auto; }
+.dd-list::-webkit-scrollbar { width: 0; }
+.dd-opt {
+  display: flex; align-items: center; gap: 10px;
+  font: inherit; font-size: 13px; color: var(--ink); text-align: left;
+  background: transparent; border: 0; padding: 8px 9px; border-radius: 8px; cursor: pointer;
+}
+.dd-opt:hover { background: rgba(255, 255, 255, 0.06); color: var(--ink-hi); }
+.dd-opt[aria-selected="true"] { background: rgba(255, 255, 255, 0.1); color: var(--ink-hi); }
+.dd-empty { padding: 12px 9px; font-size: 12.5px; color: var(--ink-faint); }
+.dd-search {
+  display: flex; align-items: center; gap: 8px; margin-top: 4px;
+  padding: 8px 9px; border-top: 1px solid var(--line); color: var(--ink-faint);
+}
+.dd-search input {
+  flex: 1 1 auto; font: inherit; font-size: 13px; color: var(--ink-hi);
+  background: transparent; border: 0; outline: none; padding: 0;
+}
+.dd-search input::placeholder { color: var(--ink-faint); }
+
+.switch { position: relative; width: 40px; height: 23px; border-radius: 20px; background: rgba(255, 255, 255, 0.14); border: 0; cursor: pointer; padding: 0; transition: background 0.2s; }
+.switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 19px; height: 19px; border-radius: 50%; background: #fff; transition: transform 0.2s; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35); }
+.switch[aria-pressed="true"] { background: var(--accent); }
+.switch[aria-pressed="true"]::after { transform: translateX(17px); }
+.switch:disabled { opacity: 0.35; cursor: not-allowed; }
+.toggle-row { display: flex; align-items: center; gap: 14px; }
+.toggle-cell { display: flex; flex-direction: column; align-items: center; gap: 7px; }
+.toggle-cell .lbl { font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-faint); font-weight: 600; }
+
+.qr-ctl { display: flex; align-items: center; gap: 8px; }
+.date-ctl { display: flex; align-items: center; gap: 10px; }
+.date-ctl .dock-date { flex: 1 1 auto; }
+.bg-ctl { display: flex; align-items: center; gap: 10px; }
+.bg-ctl .dd-select { flex: 1 1 auto; min-width: 0; }
+.bg-ctl .dd-trigger { width: 100%; min-width: 0; }
+/* 书名行内联挂章节子开关：小号追踪字标注第二个 Switch 的对象，与 .grp>.lbl 同色阶但不占独立行 */
+.title-ctl { display: flex; align-items: center; gap: 10px; }
+.title-ctl-sep { font-size: 10px; letter-spacing: 0.14em; color: var(--ink-faint); font-weight: 600; }
+.dock-input { font: inherit; font-size: 12.5px; color: var(--ink-hi); background: rgba(0, 0, 0, 0.28); border: 1px solid var(--line); border-radius: 8px; padding: 6px 9px; flex: 1 1 auto; min-width: 0; outline: none; }
+.dock-input::placeholder { color: var(--ink-faint); }
+.dock-input:focus { border-color: var(--accent); }
+/* 日期用原生 type=date：color-scheme 暗色让文字/日历图标适配磨砂暗房，输入框本体沿用 .dock-input */
+.dock-date { color-scheme: dark; cursor: pointer; }
+
+/* ===== 版式专属设置：面板底部的可折叠区(默认收起)。标题栏点开/收，内容按当前版式变 ===== */
+.section { border-top: 1px solid var(--line); padding-top: 13px; margin-top: 2px; }
+.section-head {
+  width: 100%; display: flex; align-items: center; justify-content: space-between;
+  background: none; border: 0; padding: 0; cursor: pointer; color: inherit;
+}
+.section-head .lbl { font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink-faint); font-weight: 600; padding-left: 2px; }
+.section-head .chev { color: var(--ink-faint); transition: transform 0.22s ease; }
+.section-head:hover .lbl, .section-head:hover .chev { color: var(--ink-hi); }
+.section-head[aria-expanded="true"] .chev { transform: rotate(180deg); }
+/* 顶层新增「字号」一行后整体变高，上限相应收窄(340→280)；矮窗口按面板其余固定高度反推可用空间。 */
+.section-body { display: flex; flex-direction: column; gap: 15px; margin-top: 13px; height: clamp(72px, calc(100vh - 580px), 280px); overflow-y: auto; }
+.section-body::-webkit-scrollbar { display: none; }
+
+/* 头像专属组：显隐开关 + 上传按钮 + 可点选历史缩略图(当前项高亮描边) */
+.avatar-ctl { display: flex; align-items: center; gap: 10px; }
+.avatar-history { display: flex; flex-wrap: wrap; gap: 8px; }
+.avatar-thumb {
+  width: 34px; height: 34px; flex: 0 0 auto; border-radius: 8px; cursor: pointer; padding: 0;
+  background-size: cover; background-position: center; border: 1px solid var(--line); outline: none;
+}
+.avatar-thumb:hover { border-color: var(--ink-faint); }
+.avatar-thumb.on { box-shadow: 0 0 0 2px var(--accent); border-color: transparent; }
+.dock-btn { font: inherit; font-size: 12.5px; font-weight: 600; color: var(--accent-ink); background: linear-gradient(180deg, var(--accent-2), var(--accent)); border: 0; border-radius: 8px; padding: 6px 12px; cursor: pointer; white-space: nowrap; }
+.dock-btn:hover { filter: brightness(1.05); }
+.qr svg { display: block; width: 100%; height: 100%; }
+
+/* ================= toast ================= */
+.toast {
+  position: fixed; left: 50%; bottom: 120px; transform: translate(-50%, 20px);
+  background: var(--panel-solid); border: 1px solid var(--line-2); color: var(--ink-hi);
+  padding: 11px 16px; border-radius: 11px; font-size: 13px; box-shadow: var(--dock-shadow);
+  opacity: 0; pointer-events: none; transition: opacity 0.25s, transform 0.25s; z-index: 60;
+  display: flex; align-items: center; gap: 9px;
+}
+.toast.show { opacity: 1; transform: translate(-50%, 0); }
+.toast .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
+
+@media (max-width: 720px) {
+  .brand .sub { display: none; }
+  /* 窄屏侧栏收窄，且舞台不再让位(避免过挤)——侧栏浮于卡片上，收起即见全貌 */
+  .dock-wrap { --panel-w: min(340px, 86vw); }
+  .stage { padding: 20px 12px; }
+  .workspace.dock-collapsed .stage { padding-right: 44px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; }
+}
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }

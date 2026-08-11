@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "书摘主窗口权限。自定义命令 save_png / reveal_path 属应用本地命令，无需在此登记。",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}

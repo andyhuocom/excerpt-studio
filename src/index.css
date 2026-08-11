@@ -1,0 +1,10 @@
+/**
+ * [INPUT]: 依赖 Tailwind 基础层、styles/tokens.css 设计令牌与 styles/studio.css 界面实现
+ * [OUTPUT]: 对应用提供确定顺序的全局 CSS 级联入口
+ * [POS]: src 前端边界的样式组合根，只定义加载顺序，不重复声明设计规则
+ * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+ */
+
+@import "tailwindcss";
+@import "./styles/tokens.css";
+@import "./styles/studio.css";

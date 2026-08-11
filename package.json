@@ -1,0 +1,44 @@
+{
+  "name": "excerpt-studio",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "本地离线的书摘分享卡片生成器 · 微信读书风格 · Tauri + React",
+  "license": "MIT",
+  "author": "Huo",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview --host 127.0.0.1",
+    "test": "node --test src/components/controls/MarkdownQuote.test.mjs src/state/styleVisibility.test.mjs src/state/typography.test.mjs && npm run build",
+    "test:package": "./script/test_package_macos.sh",
+    "tauri": "tauri",
+    "tauri:dev": "tauri dev",
+    "tauri:build": "./script/package_macos.sh"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "2.11.0",
+    "clsx": "^2.1.1",
+    "html-to-image": "^1.11.13",
+    "jotai": "^2.10.3",
+    "qrcode": "^1.5.4",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "tailwind-merge": "^3.5.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.2.2",
+    "@tauri-apps/cli": "2.11.0",
+    "@types/node": "^24.10.1",
+    "@types/qrcode": "^1.5.6",
+    "@types/react": "^19.2.7",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^5.1.1",
+    "tailwindcss": "^4.2.2",
+    "typescript": "~5.9.3",
+    "vite": "^8.0.16"
+  }
+}
